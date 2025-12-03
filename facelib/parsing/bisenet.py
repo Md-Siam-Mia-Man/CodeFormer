@@ -9,7 +9,14 @@ class ConvBNReLU(nn.Module):
 
     def __init__(self, in_chan, out_chan, ks=3, stride=1, padding=1):
         super(ConvBNReLU, self).__init__()
-        self.conv = nn.Conv2d(in_chan, out_chan, kernel_size=ks, stride=stride, padding=padding, bias=False)
+        self.conv = nn.Conv2d(
+            in_chan,
+            out_chan,
+            kernel_size=ks,
+            stride=stride,
+            padding=padding,
+            bias=False,
+        )
         self.bn = nn.BatchNorm2d(out_chan)
 
     def forward(self, x):
@@ -69,16 +76,16 @@ class ContextPath(nn.Module):
 
         avg = F.avg_pool2d(feat32, feat32.size()[2:])
         avg = self.conv_avg(avg)
-        avg_up = F.interpolate(avg, (h32, w32), mode='nearest')
+        avg_up = F.interpolate(avg, (h32, w32), mode="nearest")
 
         feat32_arm = self.arm32(feat32)
         feat32_sum = feat32_arm + avg_up
-        feat32_up = F.interpolate(feat32_sum, (h16, w16), mode='nearest')
+        feat32_up = F.interpolate(feat32_sum, (h16, w16), mode="nearest")
         feat32_up = self.conv_head32(feat32_up)
 
         feat16_arm = self.arm16(feat16)
         feat16_sum = feat16_arm + feat32_up
-        feat16_up = F.interpolate(feat16_sum, (h8, w8), mode='nearest')
+        feat16_up = F.interpolate(feat16_sum, (h8, w8), mode="nearest")
         feat16_up = self.conv_head16(feat16_up)
 
         return feat8, feat16_up, feat32_up  # x8, x8, x16
@@ -89,8 +96,12 @@ class FeatureFusionModule(nn.Module):
     def __init__(self, in_chan, out_chan):
         super(FeatureFusionModule, self).__init__()
         self.convblk = ConvBNReLU(in_chan, out_chan, ks=1, stride=1, padding=0)
-        self.conv1 = nn.Conv2d(out_chan, out_chan // 4, kernel_size=1, stride=1, padding=0, bias=False)
-        self.conv2 = nn.Conv2d(out_chan // 4, out_chan, kernel_size=1, stride=1, padding=0, bias=False)
+        self.conv1 = nn.Conv2d(
+            out_chan, out_chan // 4, kernel_size=1, stride=1, padding=0, bias=False
+        )
+        self.conv2 = nn.Conv2d(
+            out_chan // 4, out_chan, kernel_size=1, stride=1, padding=0, bias=False
+        )
         self.relu = nn.ReLU(inplace=True)
         self.sigmoid = nn.Sigmoid()
 
@@ -127,14 +138,14 @@ class BiSeNet(nn.Module):
         out16, feat16 = self.conv_out16(feat_cp8)
         out32, feat32 = self.conv_out32(feat_cp16)
 
-        out = F.interpolate(out, (h, w), mode='bilinear', align_corners=True)
-        out16 = F.interpolate(out16, (h, w), mode='bilinear', align_corners=True)
-        out32 = F.interpolate(out32, (h, w), mode='bilinear', align_corners=True)
+        out = F.interpolate(out, (h, w), mode="bilinear", align_corners=True)
+        out16 = F.interpolate(out16, (h, w), mode="bilinear", align_corners=True)
+        out32 = F.interpolate(out32, (h, w), mode="bilinear", align_corners=True)
 
         if return_feat:
-            feat = F.interpolate(feat, (h, w), mode='bilinear', align_corners=True)
-            feat16 = F.interpolate(feat16, (h, w), mode='bilinear', align_corners=True)
-            feat32 = F.interpolate(feat32, (h, w), mode='bilinear', align_corners=True)
+            feat = F.interpolate(feat, (h, w), mode="bilinear", align_corners=True)
+            feat16 = F.interpolate(feat16, (h, w), mode="bilinear", align_corners=True)
+            feat32 = F.interpolate(feat32, (h, w), mode="bilinear", align_corners=True)
             return out, out16, out32, feat, feat16, feat32
         else:
             return out, out16, out32
