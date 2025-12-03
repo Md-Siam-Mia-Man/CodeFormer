@@ -1,100 +1,87 @@
 // from https://github.com/rosinality/stylegan2-pytorch/blob/master/op/fused_bias_act_kernel.cu
-// Copyright (c) 2019, NVIDIA Corporation. All rights reserved.
-//
-// This work is made available under the Nvidia Source Code License-NC.
-// To view a copy of this license, visit
-// https://nvlabs.github.io/stylegan2/license.html
 
 #include <torch/types.h>
-
-#include <ATen/ATen.h>
-#include <ATen/AccumulateType.h>
-#include <ATen/cuda/CUDAContext.h>
-#include <ATen/cuda/CUDAApplyUtils.cuh>
-
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-
 template <typename scalar_t>
-static __global__ void fused_bias_act_kernel(scalar_t* out, const scalar_t* p_x, const scalar_t* p_b, const scalar_t* p_ref,
-    int act, int grad, scalar_t alpha, scalar_t scale, int loop_x, int size_x, int step_b, int size_b, int use_bias, int use_ref) {
-    int xi = blockIdx.x * loop_x * blockDim.x + threadIdx.x;
+static __global__ void fused_bias_act_kernel(
+    scalar_t* out,
+    const scalar_t* p_input,
+    const scalar_t* p_bias,
+    const scalar_t* p_refer,
+    int n_channel,
+    int n_flow,
+    int act,
+    int grad,
+    scalar_t alpha,
+    scalar_t scale
+) {
+    const int index = blockIdx.x * blockDim.x + threadIdx.x;
 
-    scalar_t zero = 0.0;
+    if (index >= n_channel * n_flow)
+        return;
 
-    for (int loop_idx = 0; loop_idx < loop_x && xi < size_x; loop_idx++, xi += blockDim.x) {
-        scalar_t x = p_x[xi];
+    const int c_index = index % n_channel;
 
-        if (use_bias) {
-            x += p_b[(xi / step_b) % size_b];
-        }
+    scalar_t bias = p_bias[c_index];
+    scalar_t input = p_input[index];
+    scalar_t refer = (p_refer) ? p_refer[index] : 0;
 
-        scalar_t ref = use_ref ? p_ref[xi] : zero;
+    scalar_t output;
 
-        scalar_t y;
-
-        switch (act * 10 + grad) {
-            default:
-            case 10: y = x; break;
-            case 11: y = x; break;
-            case 12: y = 0.0; break;
-
-            case 30: y = (x > 0.0) ? x : x * alpha; break;
-            case 31: y = (ref > 0.0) ? x : x * alpha; break;
-            case 32: y = 0.0; break;
-        }
-
-        out[xi] = y * scale;
+    if (grad == 0) {
+        output = input + bias;
+    } else {
+        output = input;
     }
+
+    if (act == 1) {
+        if (grad == 0) {
+            output = (output > 0) ? output : output * alpha;
+        } else {
+            output = (refer > 0) ? output : output * alpha;
+        }
+    } else if (act == 3) {
+        if (grad == 0) {
+            output = (output > 0) ? output : output * alpha;
+            output = output * scale;
+        } else {
+            output = (refer > 0) ? output * scale : output * alpha * scale;
+        }
+    }
+
+    out[index] = output;
 }
 
-
-torch::Tensor fused_bias_act_op(const torch::Tensor& input, const torch::Tensor& bias, const torch::Tensor& refer,
-    int act, int grad, float alpha, float scale) {
+torch::Tensor fused_bias_act_op(const torch::Tensor& input,
+                                const torch::Tensor& bias,
+                                const torch::Tensor& refer,
+                                int act, int grad, float alpha, float scale) {
     int curDevice = -1;
     cudaGetDevice(&curDevice);
     cudaStream_t stream = at::cuda::getCurrentCUDAStream(curDevice);
 
-    auto x = input.contiguous();
-    auto b = bias.contiguous();
-    auto ref = refer.contiguous();
+    auto out = torch::empty_like(input);
 
-    int use_bias = b.numel() ? 1 : 0;
-    int use_ref = ref.numel() ? 1 : 0;
+    int n_channel = input.size(1);
+    int n_flow = input.size(0) * input.size(2) * input.size(3);
+    int n_block = (n_channel * n_flow + 512 - 1) / 512;
 
-    int size_x = x.numel();
-    int size_b = b.numel();
-    int step_b = 1;
-
-    for (int i = 1 + 1; i < x.dim(); i++) {
-        step_b *= x.size(i);
-    }
-
-    int loop_x = 4;
-    int block_size = 4 * 32;
-    int grid_size = (size_x - 1) / (loop_x * block_size) + 1;
-
-    auto y = torch::empty_like(x);
-
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(x.scalar_type(), "fused_bias_act_kernel", [&] {
-        fused_bias_act_kernel<scalar_t><<<grid_size, block_size, 0, stream>>>(
-            y.data_ptr<scalar_t>(),
-            x.data_ptr<scalar_t>(),
-            b.data_ptr<scalar_t>(),
-            ref.data_ptr<scalar_t>(),
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(), "fused_bias_act_kernel", [&] {
+        fused_bias_act_kernel<scalar_t><<<n_block, 512, 0, stream>>>(
+            out.data_ptr<scalar_t>(),
+            input.data_ptr<scalar_t>(),
+            bias.data_ptr<scalar_t>(),
+            refer.data_ptr<scalar_t>(),
+            n_channel,
+            n_flow,
             act,
             grad,
-            alpha,
-            scale,
-            loop_x,
-            size_x,
-            step_b,
-            size_b,
-            use_bias,
-            use_ref
+            static_cast<scalar_t>(alpha),
+            static_cast<scalar_t>(scale)
         );
     });
 
-    return y;
+    return out;
 }
