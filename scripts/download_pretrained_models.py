@@ -1,51 +1,68 @@
 import argparse
 import os
+import sys
 from os import path as osp
+
+# Add the project root directory to the Python path to allow importing patches
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+try:
+    from patches import apply_torchvision_patches
+
+    apply_torchvision_patches()
+except ImportError:
+    pass
 
 from basicsr.utils.download_util import load_file_from_url
 
 
 def download_pretrained_models(method, file_urls):
-    if method == 'CodeFormer_train':
-        method = 'CodeFormer'
-    save_path_root = f'./weights/{method}'
+    if method == "CodeFormer_train":
+        method = "CodeFormer"
+    save_path_root = f"./weights/{method}"
     os.makedirs(save_path_root, exist_ok=True)
 
     for file_name, file_url in file_urls.items():
-        save_path = load_file_from_url(url=file_url, model_dir=save_path_root, progress=True, file_name=file_name)
+        save_path = load_file_from_url(
+            url=file_url, model_dir=save_path_root, progress=True, file_name=file_name
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        'method',
+        "--method",
         type=str,
-        help=("Options: 'CodeFormer' 'facelib' 'dlib'. Set to 'all' to download all the models."))
+        default="all",
+        help=(
+            "Options: 'CodeFormer' 'facelib' 'dlib'. Set to 'all' to download all the models."
+        ),
+    )
     args = parser.parse_args()
 
     file_urls = {
-        'CodeFormer': {
-            'codeformer.pth': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth'
+        "CodeFormer": {
+            "codeformer.pth": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth"
         },
-        'CodeFormer_train': {
-            'vqgan_code1024.pth': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/vqgan_code1024.pth',
-            'latent_gt_code1024.pth': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/latent_gt_code1024.pth',
-            'codeformer_stage2.pth': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer_stage2.pth',
-            'codeformer.pth': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth'
+        "CodeFormer_train": {
+            "vqgan_code1024.pth": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/vqgan_code1024.pth",
+            "latent_gt_code1024.pth": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/latent_gt_code1024.pth",
+            "codeformer_stage2.pth": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer_stage2.pth",
+            "codeformer.pth": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/codeformer.pth",
         },
-        'facelib': {
+        "facelib": {
             # 'yolov5l-face.pth': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/yolov5l-face.pth',
-            'detection_Resnet50_Final.pth': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/detection_Resnet50_Final.pth',
-            'parsing_parsenet.pth': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/parsing_parsenet.pth'
+            "detection_Resnet50_Final.pth": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/detection_Resnet50_Final.pth",
+            "parsing_parsenet.pth": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/parsing_parsenet.pth",
         },
-        'dlib': {
-            'mmod_human_face_detector-4cb19393.dat': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/mmod_human_face_detector-4cb19393.dat',
-            'shape_predictor_5_face_landmarks-c4b1e980.dat': 'https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/shape_predictor_5_face_landmarks-c4b1e980.dat'
-        }
+        "dlib": {
+            "mmod_human_face_detector-4cb19393.dat": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/mmod_human_face_detector-4cb19393.dat",
+            "shape_predictor_5_face_landmarks-c4b1e980.dat": "https://github.com/sczhou/CodeFormer/releases/download/v0.1.0/shape_predictor_5_face_landmarks-c4b1e980.dat",
+        },
     }
 
-    if args.method == 'all':
+    if args.method == "all":
         for method in file_urls.keys():
             download_pretrained_models(method, file_urls[method])
     else:
