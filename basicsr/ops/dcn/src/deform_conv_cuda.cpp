@@ -155,12 +155,6 @@ int deform_conv_forward_cuda(at::Tensor input, at::Tensor weight,
                              int kH, int dW, int dH, int padW, int padH,
                              int dilationW, int dilationH, int group,
                              int deformable_group, int im2col_step) {
-  // todo: resize columns to include im2col: done
-  // todo: add im2col_step as input
-  // todo: add new output buffer and transpose it to output (or directly
-  // transpose output) todo: possibly change data indexing because of
-  // parallel_imgs
-
   shape_check(input, offset, NULL, weight, kH, kW, dH, dW, padH, padW,
               dilationH, dilationW, group, deformable_group);
   at::DeviceGuard guard(input.device());
@@ -176,8 +170,6 @@ int deform_conv_forward_cuda(at::Tensor input, at::Tensor weight,
     input.unsqueeze_(0);
     offset.unsqueeze_(0);
   }
-
-  // todo: assert batchsize dividable by im2col_step
 
   long batchSize = input.size(0);
   long nInputPlane = input.size(1);
@@ -379,10 +371,6 @@ int deform_conv_backward_parameters_cuda(
     at::Tensor columns, at::Tensor ones, int kW, int kH, int dW, int dH,
     int padW, int padH, int dilationW, int dilationH, int group,
     int deformable_group, float scale, int im2col_step) {
-  // todo: transpose and reshape outGrad
-  // todo: reshape columns
-  // todo: add im2col_step as input
-
   shape_check(input, offset, &gradOutput, gradWeight, kH, kW, dH, dW, padH,
               padW, dilationH, dilationW, group, deformable_group);
   at::DeviceGuard guard(input.device());
@@ -397,7 +385,7 @@ int deform_conv_backward_parameters_cuda(
     // Force batch
     batch = 0;
     input = input.view(
-        at::IntList({1, input.size(0), input.size(1), input.size(2)}));
+        {1, input.size(0), input.size(1), input.size(2)});
     gradOutput = gradOutput.view(
         {1, gradOutput.size(0), gradOutput.size(1), gradOutput.size(2)});
   }
